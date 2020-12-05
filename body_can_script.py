@@ -3,6 +3,7 @@ import glob
 import csv
 import os
 import shelve
+from datetime import datetime, timedelta
 from dataclasses import dataclass
 
 
@@ -22,7 +23,7 @@ class Identifier:
 
 ##########################################################################################
 identifier_dict = {}  # a container for all the identifier objects
-
+priority_ids_list = []
 # create and specify the necessary paths/folders
 if not os.path.exists("Output_CSVs"):
     os.mkdir("Output_CSVs")
@@ -87,7 +88,7 @@ for index, row in df.iterrows():
 print("ID 0x108 changes at the following times:")
 print(identifier_dict["108"].time_list)
 
-# save the identifier objects in a makeshift file database
+# save the identifier objects in a makeshift file database in case multiple scripts are needed that need the identifier's sorted data
 with shelve.open(os.path.join(db_path, "Identifier_DB")) as db:
     for key in identifier_dict:
         db[key] = identifier_dict[key]
@@ -117,37 +118,77 @@ filtered_df.to_csv(os.path.join(output_path, "Filtered_Sorted(by_PayloadChanges)
 
 # generate additional different csv files based on the number of changes
 # create 3 different csv files for this...an extra csv file in the db to save the names of the analysable ID
-f1 = open(os.path.join(output_path, "Filtered(No_Change).csv"),"w")
-f2 = open(os.path.join(output_path, "Filtered(Analysable_Changes).csv"),"w")
-f3 = open(os.path.join(output_path, "Filtered(Many_Changes).csv"),"w")
-f_db = open(os.path.join(db_path, "priority_ids.csv"), "w")
+f1 = open(os.path.join(output_path, "Filtered(No_Change).csv"), "w")
+f2 = open(os.path.join(output_path, "Filtered(Analysable_Changes).csv"), "w")
+f3 = open(os.path.join(output_path, "Filtered(Many_Changes).csv"), "w")
 
 writer1 = csv.writer(f1)
-writer1.writerow(["ID_(dec)", "ID_(hex)", "Occurrences", "Payload_Changes", "Total_Unique_Payloads"])
+writer1.writerow(["ID_(dec)", "ID_(hex)", "Occurrences", "Payload_Changes"])
 writer2 = csv.writer(f2)
 writer2.writerow(["ID_(dec)", "ID_(hex)", "Occurrences", "Payload_Changes", "Total_Unique_Payloads"])
 writer3 = csv.writer(f3)
 writer3.writerow(["ID_(dec)", "ID_(hex)", "Occurrences", "Payload_Changes", "Total_Unique_Payloads"])
-writer_fdb = csv.writer(f_db)
-writer_fdb.writerow(["ID_(hex)"])
 
 for identifier in identifier_dict.values():
     if identifier.payload_changes == 0 and identifier.occurrences > 25:
-        writer1.writerow([identifier.id_int,identifier.id_hex,identifier.occurrences,identifier.payload_changes])
+        writer1.writerow([identifier.id_int, identifier.id_hex, identifier.occurrences, identifier.payload_changes])
 
     elif (identifier.payload_changes == 0 and identifier.occurrences <= 25) or (1 <= identifier.payload_changes <= 25):
-        writer2.writerow([identifier.id_int,identifier.id_hex,identifier.occurrences,identifier.payload_changes,len(identifier.unique_payloads)])
-        writer_fdb.writerow([identifier.id_hex])
-
+        writer2.writerow([identifier.id_int, identifier.id_hex, identifier.occurrences, identifier.payload_changes,
+                          len(identifier.unique_payloads)])
+        priority_ids_list.append(identifier.id_hex)
+       
     else:
-        writer3.writerow([identifier.id_int, identifier.id_hex, identifier.occurrences, identifier.payload_changes,len(identifier.unique_payloads)])
+        writer3.writerow([identifier.id_int, identifier.id_hex, identifier.occurrences, identifier.payload_changes,
+                          len(identifier.unique_payloads)])
 
 f1.close()
 f2.close()
 f3.close()
-f_db.close()
+# f_db.close()
 
 
+########################################################################################################################
+# MATCHING THE ANALYSABLE IDS TO THE TIMELOGGED ACTIONS
+# This should be done in a separate script
 
+# Read in the timelogs and save to a timelog dictionary
+tlog_input_path = os.path.join(".", "TimeLog_CSVs", "*.csv")
+tlog_filenames = glob.glob(tlog_input_path)
+frame_list = []
+for filename in tlog_filenames:
+    single_frame = pd.read_csv(filename, header=0, index_col=None)
+    frame_list.append(single_frame)
+timelog_df = pd.concat(frame_list, ignore_index=True)
+# print(timelog_df)
 
+timelog_dict = {}
+for index, row in timelog_df.iterrows():
+    time_key = datetime.strftime((datetime.strptime(row["Time"], "%H:%M:%S.%f").replace(microsecond=0)), "%H:%M:%S.%f")
+    timelog_dict[time_key] = row["Action"]
+print(timelog_dict)
 
+# Create a new csv file to record the action to id match.
+f_match = open(os.path.join(output_path, "ID_Action_Match.csv"), "w")
+writer_m = csv.writer(f_match)
+writer_m.writerow(["ID_(hex)", "ID_Timestamp", "Action_Timestamp(w/out milliseconds)", "Action"])
+
+# Match the IDs to the timelogs
+# for each timestamp in each Identifier's time_list, create a new list that has the timestamp range +/-3 seconds
+# remove the milliseconds
+# check if any of these new timestamps match any of the timelog timestamps (also without milliseconds)
+
+for id in priority_ids_list:
+    for t_stamp in identifier_dict[id].time_list:
+        t_keys = []
+        t1 = datetime.strptime(t_stamp, "%H:%M:%S.%f").replace(microsecond=0)
+        for i in range(-3, 4):
+            t_key = datetime.strftime((t1 + timedelta(seconds=i)), "%H:%M:%S.%f")
+            t_keys.append(t_key)
+        for tkey in t_keys:
+            #print("t_stamp = {}     t_key = {}".format(t_stamp, key))
+            if tkey in timelog_dict.keys():
+                writer_m.writerow([id, t_stamp, tkey, timelog_dict[tkey]])
+                print("id = {}  t_stamp = {}     t_key = {}     action = {}".format(id, t_stamp, tkey, timelog_dict[tkey]))
+
+f_match.close()

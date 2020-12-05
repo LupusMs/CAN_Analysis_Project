@@ -1,0 +1,17 @@
+Action,Time
+charging port open,15:58:12.335
+charging port close,15:58:21.182
+suspension very high,15:58:54.700
+suspension very low,15:59:25.443
+suspension readjust to standard,15:59:57.349
+rear trunk open,16:0:23.943
+rear trunk open 2,16:0:35.164
+rear trunk close,16:0:47.159
+drive forward ,16:1:16.608
+drive backward,16:1:27.184
+drive forward 2,16:1:48.310
+driver seatbelt lock,16:2:12.922
+driver seatbelt unlock,16:2:57.493
+rear right seatbelt unlock,16:3:13.210
+rear left seatbelt lock,16:3:25.943
+rear left seatbelt unlock,16:3:33.254
