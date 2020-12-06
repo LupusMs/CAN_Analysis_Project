@@ -24,6 +24,8 @@ class Identifier:
 ##########################################################################################
 identifier_dict = {}  # a container for all the identifier objects
 priority_ids_list = []
+seconds = 3   # Time resolution in seconds(integer) needed for matching Id timestamps to the Action Timelogs.
+
 # create and specify the necessary paths/folders
 if not os.path.exists("Output_CSVs"):
     os.mkdir("Output_CSVs")
@@ -145,8 +147,6 @@ for identifier in identifier_dict.values():
 f1.close()
 f2.close()
 f3.close()
-# f_db.close()
-
 
 ########################################################################################################################
 # MATCHING THE ANALYSABLE IDS TO THE TIMELOGGED ACTIONS
@@ -160,20 +160,20 @@ for filename in tlog_filenames:
     single_frame = pd.read_csv(filename, header=0, index_col=None)
     frame_list.append(single_frame)
 timelog_df = pd.concat(frame_list, ignore_index=True)
-# print(timelog_df)
 
+# Save the timelogs in a dictionary with a string version of the time without milliseconds as the key and the action as the value.
 timelog_dict = {}
 for index, row in timelog_df.iterrows():
     time_key = datetime.strftime((datetime.strptime(row["Time"], "%H:%M:%S.%f").replace(microsecond=0)), "%H:%M:%S.%f")
     timelog_dict[time_key] = row["Action"]
 print(timelog_dict)
 
-# Create a new csv file to record the action to id match.
+# Create a new csv file to save the action to id match.
 f_match = open(os.path.join(output_path, "ID_Action_Match.csv"), "w")
 writer_m = csv.writer(f_match)
 writer_m.writerow(["ID_(hex)", "ID_Timestamp", "Action_Timestamp(w/out milliseconds)", "Action"])
 
-# Match the IDs to the timelogs
+# Match the IDs to the timelogs #
 # for each timestamp in each Identifier's time_list, create a new list that has the timestamp range +/-3 seconds
 # remove the milliseconds
 # check if any of these new timestamps match any of the timelog timestamps (also without milliseconds)
@@ -182,7 +182,7 @@ for id in priority_ids_list:
     for t_stamp in identifier_dict[id].time_list:
         t_keys = []
         t1 = datetime.strptime(t_stamp, "%H:%M:%S.%f").replace(microsecond=0)
-        for i in range(-3, 4):
+        for i in range(-seconds, seconds + 1):
             t_key = datetime.strftime((t1 + timedelta(seconds=i)), "%H:%M:%S.%f")
             t_keys.append(t_key)
         for tkey in t_keys:
