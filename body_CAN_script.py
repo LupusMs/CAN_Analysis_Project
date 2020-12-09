@@ -2,7 +2,7 @@ import pandas as pd
 import glob
 import csv
 import os
-import shelve
+import pickle
 from datetime import datetime, timedelta
 from dataclasses import dataclass
 
@@ -18,7 +18,7 @@ class Identifier:
         self.payload_changes = -1
         self.last_payload = "xyz"
         self.unique_payloads = {}
-        self.time_list = []
+        self.time_dict = {}
 
 
 ##########################################################################################
@@ -78,22 +78,21 @@ for index, row in df.iterrows():
         if row["Data (hex)"] != identifier.last_payload:
             identifier.last_payload = row["Data (hex)"]
             identifier.payload_changes += 1
-            identifier.time_list.append(row["Adjusted_Time"])
+            identifier.time_dict.update({row["Adjusted_Time"]: row["Data (hex)"]})
         identifier.unique_payloads[row["Data (hex)"]] += 1
 
     else:
         identifier.unique_payloads[row["Data (hex)"]] = 1
         identifier.last_payload = row["Data (hex)"]
         identifier.payload_changes += 1
-        identifier.time_list.append(row["Adjusted_Time"])
+        identifier.time_dict.update({row["Adjusted_Time"]: row["Data (hex)"]})
 
 print("ID 0x108 changes at the following times:")
-print(identifier_dict["108"].time_list)
+print(identifier_dict["108"].time_dict)
 
-# save the identifier objects in a makeshift file database in case multiple scripts are needed that need the identifier's sorted data
-with shelve.open(os.path.join(db_path, "Identifier_DB")) as db:
-    for key in identifier_dict:
-        db[key] = identifier_dict[key]
+# Save the identifier objects in a makeshift file database
+with open(os.path.join(db_path, "Identifier_DB_pickle"), "wb") as db:
+    pickle.dump(identifier_dict, db)
 
 # Some printing for debugging purposes
 print("0x108 unique payloads are:")
@@ -150,7 +149,7 @@ f3.close()
 
 ########################################################################################################################
 # MATCHING THE ANALYSABLE IDS TO THE TIMELOGGED ACTIONS
-# This should be done in a separate script
+# This should probably be done in a separate script
 
 # Read in the timelogs and save to a timelog dictionary
 tlog_input_path = os.path.join(".", "TimeLog_CSVs", "*.csv")
@@ -169,26 +168,25 @@ for index, row in timelog_df.iterrows():
 print(timelog_dict)
 
 # Create a new csv file to save the action to id match.
-f_match = open(os.path.join(output_path, "ID_Action_Match.csv"), "w")
-writer_m = csv.writer(f_match)
-writer_m.writerow(["ID_(hex)", "ID_Timestamp", "Action_Timestamp(w/out milliseconds)", "Action"])
+with open(os.path.join(output_path, "ID_Action_Match.csv"), "w") as f_match:
+    writer_m = csv.writer(f_match)
+    writer_m.writerow(["ID_Occurrences", "Payload_Changes", "ID_(hex)", "ID_Timestamp", "Action_Timestamp(w/out milliseconds)", "Action"])
 
-# Match the IDs to the timelogs #
-# for each timestamp in each Identifier's time_list, create a new list that has the timestamp range +/-3 seconds
-# remove the milliseconds
-# check if any of these new timestamps match any of the timelog timestamps (also without milliseconds)
+    # Match the IDs to the timelogs #
+    # for each timestamp in each Identifier's time_dict, create a new list that has the timestamp range +/-3 seconds
+    # remove the milliseconds
+    # check if any of these new timestamps match any of the timelog timestamps (also without milliseconds)
 
-for id in priority_ids_list:
-    for t_stamp in identifier_dict[id].time_list:
-        t_keys = []
-        t1 = datetime.strptime(t_stamp, "%H:%M:%S.%f").replace(microsecond=0)
-        for i in range(-seconds, seconds + 1):
-            t_key = datetime.strftime((t1 + timedelta(seconds=i)), "%H:%M:%S.%f")
-            t_keys.append(t_key)
-        for tkey in t_keys:
-            #print("t_stamp = {}     t_key = {}".format(t_stamp, key))
-            if tkey in timelog_dict.keys():
-                writer_m.writerow([id, t_stamp, tkey, timelog_dict[tkey]])
-                print("id = {}  t_stamp = {}     t_key = {}     action = {}".format(id, t_stamp, tkey, timelog_dict[tkey]))
+    for id in priority_ids_list:
+        for t_stamp in identifier_dict[id].time_dict.keys():
+            t_keys = []
+            t1 = datetime.strptime(t_stamp, "%H:%M:%S.%f").replace(microsecond=0)
+            for i in range(-3, 4):
+                t_key = datetime.strftime((t1 + timedelta(seconds=i)), "%H:%M:%S.%f")
+                t_keys.append(t_key)
+            for tkey in t_keys:
+               if tkey in timelog_dict.keys():
+                    writer_m.writerow([identifier_dict[id].occurrences, identifier_dict[id].payload_changes,
+                                       id, t_stamp, tkey, timelog_dict[tkey]])
+                    print("id = {}  t_stamp = {}     t_key = {}".format(id, t_stamp, tkey))
 
-f_match.close()
