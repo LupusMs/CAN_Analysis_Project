@@ -1,4 +1,4 @@
-Time,Payload,Payload_Frequency
+Time,Payload,Payload_Occurrences
 15:52:02.621,00 00 00 00 00 00 00 00,7145
 15:55:21.823,01 96 00 00 00 00 00 00,7
 15:55:22.524,00 96 00 00 00 00 00 00,31
