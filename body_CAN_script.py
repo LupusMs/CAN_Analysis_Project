@@ -72,20 +72,23 @@ for id in identifier_dict:
 # iterate over the dataframe rows and:
 # (a)check how often the datafield changes
 # (b)see how many different messages an id is used for (it could be in (a) that only the same few messages keep getting changed over and over)
-for index, row in df.iterrows():
-    identifier = identifier_dict[row["ID (hex)"]]
-    if row["Data (hex)"] in identifier.unique_payloads.keys():
-        if row["Data (hex)"] != identifier.last_payload:
-            identifier.last_payload = row["Data (hex)"]
+# Time this as the core operation
+start_time = datetime.now()
+for row in df.itertuples():
+    identifier = identifier_dict[row[1]]
+    if row[3] in identifier.unique_payloads.keys():
+        if row[3] != identifier.last_payload:
+            identifier.last_payload = row[3]
             identifier.payload_changes += 1
-            identifier.time_dict.update({row["Adjusted_Time"]: row["Data (hex)"]})
-        identifier.unique_payloads[row["Data (hex)"]] += 1
+            identifier.time_dict.update({row[5]: row[3]})
+        identifier.unique_payloads[row[3]] += 1
 
     else:
-        identifier.unique_payloads[row["Data (hex)"]] = 1
-        identifier.last_payload = row["Data (hex)"]
+        identifier.unique_payloads[row[3]] = 1
+        identifier.last_payload = row[3]
         identifier.payload_changes += 1
-        identifier.time_dict.update({row["Adjusted_Time"]: row["Data (hex)"]})
+        identifier.time_dict.update({row[5]: row[3]})
+stop_time = datetime.now()
 
 print("ID 0x108 changes at the following times:")
 print(identifier_dict["108"].time_dict)
@@ -190,3 +193,4 @@ with open(os.path.join(output_path, "ID_Action_Match.csv"), "w") as f_match:
                                        id, t_stamp, tkey, timelog_dict[tkey]])
                     print("id = {}  t_stamp = {}     t_key = {}".format(id, t_stamp, tkey))
 
+print(f"The core operation runs for {stop_time - start_time} seconds")
